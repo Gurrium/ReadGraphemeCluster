@@ -23,6 +23,10 @@ let package = Package(
             dependencies: []),
         .testTarget(
             name: "ReadGraphemeClusterTests",
-            dependencies: ["ReadGraphemeCluster"]),
+            dependencies: ["ReadGraphemeCluster"],
+            resources: [
+                .process("input.txt")
+            ]
+        ),
     ]
 )

@@ -3,7 +3,10 @@ import XCTest
 
 final class ReadGraphemeClusterTests: XCTestCase {
     func test_readGraphemeCluster() throws {
-        let mockFileHandle = FileHandle(forReadingAtPath: "./input.txt")!
+        let url = Bundle.module.url(forResource: "input", withExtension: "txt")!
+        let mockFileHandle = try! FileHandle(forReadingFrom: url)
         let char = readGraphemeCluster(from: mockFileHandle)
+
+        XCTAssertEqual(char, " ")
     }
 }
