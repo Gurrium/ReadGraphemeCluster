@@ -9,3 +9,4 @@ DerivedData/
 .netrc
 
 scripts/tmp.txt
+*.generated.swift

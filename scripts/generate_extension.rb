@@ -15,7 +15,7 @@ keys = {
 }
 rules = {}
 
-File.open('tmp.txt') do |f|
+File.open(File.join(File.dirname(__FILE__), "tmp.txt")) do |f|
   f.each_line do |l|
     captures = l.match(/^([\h\.]+)\s+; ([[:alpha:]]+)/)&.captures
     next if captures.nil?
@@ -36,28 +36,23 @@ File.open('tmp.txt') do |f|
     end
   end
 
-  // TODO: 適切な場所に配置する
-  File.open('GraphemeClusterBreak+match.swift', 'w') do |out_file|
-    out_file.puts <<"EXTENSION"
+  puts <<"EXTENSION"
 extension GraphemeClusterBreak {
     // ref: https://www.unicode.org/Public/UCD/latest/ucd/auxiliary/GraphemeBreakProperty.txt
     func match(_ scalar: UnicodeScalar) -> Bool {
         switch self {
 EXTENSION
 
-    rules.each do |property_value, test|
-      out_file.puts <<"CASE"
+  rules.each do |property_value, test|
+    puts <<"CASE"
             case #{keys[property_value]}: // #{property_value}
                 return #{test.join(" ||\n                    ")}
 CASE
-    end
+  end
 
-    out_file.puts <<"EXTENSION"
+  puts <<"EXTENSION"
          }
      }
  }
 EXTENSION
-  end
-
-  0
 end
