@@ -1,6 +1,6 @@
 import Foundation
 
-enum GraphemeCluterBreak {
+enum GraphemeClusterBreak {
     case sot
     case eot
     case cr
