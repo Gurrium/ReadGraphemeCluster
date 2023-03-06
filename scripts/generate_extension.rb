@@ -17,7 +17,7 @@ rules = {}
 
 File.open(File.join(File.dirname(__FILE__), "tmp.txt")) do |f|
   f.each_line do |l|
-    captures = l.match(/^([\h\.]+)\s+; ([[:alpha:]]+)/)&.captures
+    captures = l.match(/^([\h\.]+)\s+; (\w+)/)&.captures
     next if captures.nil?
 
     codepoints, property_value = captures
@@ -45,14 +45,21 @@ EXTENSION
 
   rules.each do |property_value, test|
     puts <<"CASE"
-            case #{keys[property_value]}: // #{property_value}
-                return #{test.join(" ||\n                    ")}
+        case .#{keys[property_value]}: // #{property_value}
+            return #{test.join(" ||\n                    ")}
 CASE
   end
 
+  puts <<"OTHERS"
+        case .eBase, .eModifier, .glueAfterZWJ, .eBaseGAZ, .any:
+            return true
+        case .sot, .eot:
+            return false
+OTHERS
+
   puts <<"EXTENSION"
-         }
-     }
- }
+        }
+    }
+}
 EXTENSION
 end
