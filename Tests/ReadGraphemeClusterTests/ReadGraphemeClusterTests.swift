@@ -4,43 +4,33 @@ import System
 
 final class ReadGraphemeClusterTests: XCTestCase {
     func test_readGraphemeCluster() async throws {
-        let url = Bundle.module.url(forResource: "input", withExtension: "txt")!
-        let fileHandle = try! FileHandle(forUpdating: url)
+//        let url = Bundle.module.url(forResource: "input", withExtension: "txt")!
+//        let fileHandle = try! FileHandle(forUpdating: url)
 
+        let pipe = Pipe()
         let expected = "hoge"
-        fileHandle.writeabilityHandler = { fh in
-            expected.forEach { char in
-                XCTAssertNotNil(try? fh.write(contentsOf: Array(char.utf8)))
+
+        Task.detached {
+            var continuation: AsyncStream<Character>.Continuation!
+            let stream = AsyncStream<Character> { continuation = $0 }
+
+            try await Task.sleep(nanoseconds: 5_000_000)
+            expected.forEach {
+                continuation.yield($0)
+            }
+
+            for await char in stream {
+                try await Task.sleep(nanoseconds: 5_000_000)
+                try pipe.fileHandleForWriting.write(contentsOf: Array(char.utf8))
             }
         }
 
-        //        Task.detached {
-        //            let sheeps: UInt64 = 500_000_000
-        //            try await Task.sleep(nanoseconds: sheeps)
-        //            await withThrowingTaskGroup(of: Void.self, body: { taskGroup in
-        //                expected.forEach { char in
-        //                    taskGroup.addTask {
-        //                        print("tg:", char)
-            //                        XCTAssertNoThrow(try fileHandle.write(contentsOf: Array(char.utf8)))
-            //                        try await Task.sleep(nanoseconds: sheeps)
-            //                    }
-            //                }
-            //            })
-
-        //            try expected.forEach { char in
-        //                print("ee char:", char)
-        //                XCTAssertNoThrow(try fileHandle.write(contentsOf: Array(char.utf8)))
-        //            }
-        //        }
-
-        let exp = expectation(description: "wait for reading")
         var actual = ""
-        for try await character in AsyncCharacterSequence(fileHandle: fileHandle) {
+        for try await character in AsyncCharacterSequence(fileHandle: pipe.fileHandleForReading) {
             actual.append(character)
             if actual == expected {
-                exp.fulfill()
+                break
             }
         }
-        wait(for: [exp], timeout: 1)
     }
 }
