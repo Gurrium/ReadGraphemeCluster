@@ -25,12 +25,25 @@ final class ReadGraphemeClusterTests: XCTestCase {
             }
         }
 
-        var actual = ""
-        for try await character in AsyncCharacterSequence(fileHandle: pipe.fileHandleForReading) {
-            actual.append(character)
-            if actual == expected {
-                break
+        let testTask = Task {
+            var actual = ""
+            for try await character in AsyncCharacterSequence(fileHandle: pipe.fileHandleForReading) {
+                actual.append(character)
+                if actual == expected {
+                    break
+                }
             }
+        }
+
+        let timeoutTask = Task {
+            try await Task.sleep(nanoseconds: 1_000_000)
+            XCTFail("timeout")
+            testTask.cancel()
+        }
+
+        do {
+            _ = try await testTask.value
+            timeoutTask.cancel()
         }
     }
 }
