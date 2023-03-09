@@ -16,11 +16,11 @@ enum GraphemeClusterBreak: CaseIterable {
     case t
     case lv
     case lvt
+    case any
     case eBase
     case eModifier
     case glueAfterZWJ
     case eBaseGAZ
-    case any
 }
 
 struct Suteito {

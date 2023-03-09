@@ -51,7 +51,7 @@ CASE
   end
 
   puts <<"OTHERS"
-        case .eBase, .eModifier, .glueAfterZWJ, .eBaseGAZ, .any:
+        case .any, .eBase, .eModifier, .glueAfterZWJ, .eBaseGAZ:
             return true
         case .sot, .eot:
             return false
