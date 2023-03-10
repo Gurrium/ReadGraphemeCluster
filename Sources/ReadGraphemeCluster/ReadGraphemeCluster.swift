@@ -21,6 +21,10 @@ enum GraphemeClusterBreak: CaseIterable {
     case eModifier
     case glueAfterZWJ
     case eBaseGAZ
+
+    init(scalar: UnicodeScalar) {
+        self = GraphemeClusterBreak.allCases.first { $0.match(scalar) }!
+    }
 }
 
 struct Suteito {
