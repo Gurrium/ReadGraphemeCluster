@@ -27,24 +27,51 @@ enum GraphemeClusterBreak: CaseIterable {
     }
 }
 
-struct Suteito {
-    private var current: GraphemeClusterBreak
+actor GraphemeCluster {
+    var character: Character {
+        var scalars = scalars
 
-    init(current: GraphemeClusterBreak) {
-        self.current = current
+        if canBreak {
+            scalars.removeLast()
+        }
+
+        // FIXME: 一つ以上のExtended Grapheme Clusterを入れると落ちる
+        // preconditionFailureっぽいのでそのままでもいいかも
+        return Character(
+            scalars.reduce("", { partialResult, scalar in
+                partialResult.appending(String(scalar))
+            })
+        )
     }
 
-    var canBreak = false
+    var lastScalar: UnicodeScalar? {
+        scalars.last
+    }
+
+    private(set) var canBreak = false
+
+    private var current: GraphemeClusterBreak
+    private var scalars = [UnicodeScalar]()
+
+    init(scalar: UnicodeScalar? = nil) {
+        if let scalar {
+            self.current = GraphemeClusterBreak(scalar: scalar)
+            self.scalars = [scalar]
+        } else {
+            self.current = .sot
+        }
+    }
 
     /// 状態を変更する。
     /// - Parameters:
     ///   - scalar: 次のUnicodeScalar
-    mutating func transitionBy(_ scalar: UnicodeScalar) {
-        let next: GraphemeClusterBreak = .allCases.first { $0.match(scalar) }!
+    func transitionBy(_ scalar: UnicodeScalar) {
+        let next = GraphemeClusterBreak(scalar: scalar)
 
         switch (current, next) {
-        case (.sot, .any),
-            (.any, .eot):
+        case  (.sot, .any):
+            canBreak = false
+        case (.any, .eot):
             canBreak = true
         case (.cr, .lf):
             canBreak = false
@@ -79,10 +106,19 @@ struct Suteito {
         }
 
         current = next
+        scalars.append(scalar)
     }
 }
 
 public struct ReadGraphemeCluster {}
+
+actor Flag {
+    var content = true
+
+    func setContent(_ flag: Bool) {
+        content = flag
+    }
+}
 
 public struct AsyncCharacterSequence: AsyncSequence {
     public typealias Element = Character
@@ -93,35 +129,84 @@ public struct AsyncCharacterSequence: AsyncSequence {
         AsyncIterator(fileHandle: fileHandle)
     }
 
-    public struct AsyncIterator: AsyncIteratorProtocol {
+    public class AsyncIterator: AsyncIteratorProtocol {
         private struct TimeoutError: Error {}
 
         let fileHandle: FileHandle
 
-        public mutating func next() async throws -> Character? {
-            var suteito = Suteito(current: .sot)
-            var scalars = [UnicodeScalar]()
+        private var previousScalar: UnicodeScalar?
 
-            for try await scalar in fileHandle.bytes.unicodeScalars {
-                // TODO: timeout
-                suteito.transitionBy(scalar)
+        init(fileHandle: FileHandle) {
+            self.fileHandle = fileHandle
+        }
 
-                if suteito.canBreak,
-                   !scalars.isEmpty {
-                    // FIXME: 一つ以上のExtended Grapheme Clusterを入れると落ちる
-                    // preconditionFailureっぽいのでそのままでもいいかも
-                    return Character(
-                        scalars.reduce("", { partialResult, scalar in
-                            partialResult.appending(String(scalar))
-                        })
-                    )
-                } else {
-                    scalars.append(scalar)
+        public func next() async throws -> Character? {
+            print("next previousScalar:", previousScalar)
+            let graphemeCluster = GraphemeCluster(scalar: previousScalar)
+            let flag = Flag()
+
+            let taskGroupResult = await withThrowingTaskGroup(of: (Character, UnicodeScalar)?.self) { taskGroup in
+                taskGroup.addTask { [weak fileHandle] in
+                    guard let fileHandle else { return nil }
+
+                    for try await scalar in fileHandle.bytes.unicodeScalars {
+                        if Task.isCancelled {
+                            return nil
+                        }
+
+                        print("scalar:", scalar)
+                        await graphemeCluster.transitionBy(scalar)
+
+                        if await graphemeCluster.canBreak {
+                            print("A")
+                            return await (graphemeCluster.character, graphemeCluster.lastScalar!)
+                        }
+
+                        await flag.setContent(false)
+                    }
+
+                    if let lastScalar = await graphemeCluster.lastScalar {
+                        print("B")
+                        return (await graphemeCluster.character, lastScalar)
+                    } else {
+                        print("C")
+                        return nil
+                    }
                 }
+
+                taskGroup.addTask {
+                    while await flag.content {
+                        try await Task.sleep(nanoseconds: 1_000)
+                    }
+
+                    guard !Task.isCancelled else { return nil }
+
+                    if let lastScalar = await graphemeCluster.lastScalar {
+                        print("D")
+                        return (await graphemeCluster.character, lastScalar)
+                    } else {
+                        print("E")
+                        return nil
+                    }
+                }
+
+                let ret = try? await taskGroup.next()!
+                    taskGroup.cancelAll()
+
+                print("ret:", ret)
+                defer {
+                    print("defer ")
+                }
+                return ret
             }
 
-            // EOF?
-            return nil
+            if let result = taskGroupResult {
+                previousScalar = result.1
+                print("set previousScalar:", previousScalar)
+                return result.0
+            } else {
+                return nil
+            }
         }
     }
 }
