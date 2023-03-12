@@ -61,35 +61,54 @@ final class ReadGraphemeClusterTests: XCTestCase {
 //        print(try await task.value)
 //    }
 
+    actor Flag {
+        var content: Bool
+
+        init(content: Bool) {
+            self.content = content
+        }
+
+        func set(_ content: Bool) {
+            self.content = content
+        }
+    }
+
     func test_cancellingTask() async throws {
-        _ = try await withThrowingTaskGroup(of: Bool.self) { group in
+        let pipe = Pipe()
+        let handle = pipe.fileHandleForReading
+        let flag = Flag(content: true)
+
+        try pipe.fileHandleForWriting.write(contentsOf: Array("a".utf8))
+
+        let groupResult = try await withThrowingTaskGroup(of: Bool.self) { group in
             group.addTask {
-                var continuation: AsyncStream<Void>.Continuation!
-                let stream = AsyncStream<Void> { continuation = $0 }
-
-                continuation.yield(())
-
-                for try await _ in stream {
-                    print("hoge")
+                var it = handle.bytes.unicodeScalars.makeAsyncIterator()
+                while let scalar = try await it.next() {
+//                for try await scalar in handle.bytes.unicodeScalars {
+                    print(scalar)
+                    await flag.set(false)
+                    try await Task.sleep(nanoseconds: 50_000)
                 }
 
-                if Task.isCancelled {
-                    print("cancelled")
-                    return false
+                return true
+            }
+
+            group.addTask {
+                while await flag.content {
+                    try await Task.sleep(nanoseconds: 1_000)
                 }
 
+                print("timeout")
                 return false
             }
 
-            group.addTask {
-                true
-            }
-
-            let ret = try? await group.next()
+            let ret = try await group.next()!
             group.cancelAll()
-            XCTAssertTrue(try XCTUnwrap(ret))
+            XCTAssertFalse(try XCTUnwrap(ret))
+
+            return ret
         }
 
-        print("end")
+        print("groupResult:", groupResult)
     }
 }
